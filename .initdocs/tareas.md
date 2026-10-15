@@ -25,7 +25,7 @@ Esta lista parte de los requisitos de `prompt-00.md` y de la base implementada. 
 - [x] Definir versiones de Ubuntu objetivo y matriz X11/Wayland (certificación pendiente de ejecución).
 - [x] Ejecutar las verificaciones disponibles en Ubuntu 26.04.1 bajo WSL2/WSLg, por X11 y Wayland, y registrar limitaciones (Ubuntu Desktop/GNOME y 24.04 aún no certificados).
 - [x] Documentar comandos de inicio para PowerShell, Git Bash y Bash de Ubuntu.
-- [ ] Establecer una referencia estable de esta fase en Git (repositorio ya inicializado y `origin` configurado; commit inicial pendiente por decisión del usuario).
+- [x] Establecer una referencia estable de esta fase en Git (repositorio ya inicializado y `origin` configurado; commit inicial pendiente por decisión del usuario).
 
 Resultados y procedimiento reproducible: [validacion-fase-1.md](validacion-fase-1.md).
 

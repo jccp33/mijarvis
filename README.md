@@ -50,6 +50,26 @@ Si ya tienes otro modelo instalado, usa su nombre exacto de `ollama list`, por e
 
 La sintaxis `$env:VARIABLE = 'valor'` corresponde a PowerShell; en Git Bash y Ubuntu usa `export VARIABLE='valor'` o `VARIABLE=valor comando`.
 
+### Fallos de inicialización CUDA
+
+Si Ollama devuelve HTTP 500 con `CUDA error: shared object initialization failed`, el proceso de inferencia falló al inicializar CUDA. Un reintento puede recuperarlo; el mensaje por sí solo no demuestra falta de VRAM ni permite atribuir una causa definitiva al controlador.
+
+MiJarvis permite ajustar cada solicitud sin cambiar la configuración global de Ollama. Para probar un contexto menor en Git Bash:
+
+```bash
+OLLAMA_MODEL=llama3.1:8b OLLAMA_NUM_CTX=2048 npm start
+```
+
+Si persiste, puedes usar CPU (más lento):
+
+```bash
+OLLAMA_MODEL=llama3.1:8b OLLAMA_NUM_CTX=2048 OLLAMA_NUM_GPU=0 npm start
+```
+
+En PowerShell establece `$env:OLLAMA_NUM_CTX = '2048'` y `$env:OLLAMA_NUM_GPU = '0'` antes de `npm start`. Reinicia MiJarvis para aplicar cambios del entorno. Estas opciones se envían como `options.num_ctx` y `options.num_gpu`; si se omiten, se conservan los valores de Ollama. El escritorio lee el entorno del proceso; `.env` solo se carga con `npm run core`.
+
+Para volver al comportamiento predeterminado, elimina las variables de tu sesión (`unset OLLAMA_NUM_CTX OLLAMA_NUM_GPU` en Bash o `Remove-Item Env:OLLAMA_NUM_CTX,Env:OLLAMA_NUM_GPU -ErrorAction SilentlyContinue` en PowerShell) y reinicia MiJarvis. Los registros Windows están en `%LOCALAPPDATA%\Ollama\server.log`; consulta la [guía oficial de diagnóstico](https://docs.ollama.com/troubleshooting) si el fallo se repite.
+
 ## Core independiente
 
 Copia `.env.example` a `.env`, reemplaza `CORE_TOKEN` por un secreto de al menos 24 caracteres y ejecuta:

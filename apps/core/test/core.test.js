@@ -5,9 +5,31 @@ import { once } from 'node:events';
 import { WebSocket } from 'ws';
 import { startCore } from '../src/server.js';
 import { SystemController } from '@mijarvis/system';
-import { generate } from '../src/ollama.js';
+import { generate, generationOptions } from '../src/ollama.js';
 
 const token = 'test-session-token-at-least-24-characters';
+
+test('Ollama options preserve defaults and allow explicit CPU configuration', () => {
+  assert.deepEqual(generationOptions({}), {});
+  assert.deepEqual(generationOptions({ OLLAMA_NUM_CTX: '2048', OLLAMA_NUM_GPU: '0' }), { num_ctx: 2048, num_gpu: 0 });
+  for (const value of ['-1', '1.5', 'abc', 'Infinity']) {
+    assert.throws(() => generationOptions({ OLLAMA_NUM_GPU: value }), /OLLAMA_NUM_GPU/);
+  }
+  assert.throws(() => generationOptions({ OLLAMA_NUM_CTX: '0' }), /OLLAMA_NUM_CTX/);
+});
+
+test('Ollama forwards CPU options and explains CUDA initialization errors', async t => {
+  const baseUrl = await mockOllama(t, async (req, res) => {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    assert.deepEqual(JSON.parse(body).options, { num_gpu: 0, num_ctx: 2048 });
+    res.writeHead(500);
+    res.end(JSON.stringify({ error: 'llama-server process has terminated: ' + 'details '.repeat(60) + 'CUDA error: shared object initialization failed' }));
+  });
+  await assert.rejects(async () => {
+    for await (const _part of generate({ baseUrl, model: 'test', prompt: 'hi', options: { num_gpu: 0, num_ctx: 2048 } })) { /* consume */ }
+  }, /Ollama HTTP 500:.*CUDA.*OLLAMA_NUM_GPU=0/);
+});
 
 async function mockOllama(t, handler) {
   const server = http.createServer(handler);
