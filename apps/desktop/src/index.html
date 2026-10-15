@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src ws://127.0.0.1:*; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>MiJarvis</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="hud">
+    <header><span>MJ / PERSONAL ASSISTANT</span><nav><button id="minimize" aria-label="Minimizar">−</button><button id="close" aria-label="Cerrar">×</button></nav></header>
+    <section class="dashboard">
+      <aside><small>TELEMETRÍA / LOCAL</small><label>CPU <output id="cpu">—</output></label><meter id="cpu-meter" min="0" max="100" value="0"></meter><label>RAM <output id="ram">—</output></label><meter id="ram-meter" min="0" max="100" value="0"></meter><p id="platform">Detectando sistema…</p><small>GPU · No disponible en fase 1</small></aside>
+      <div class="center"><div id="orb" class="orb"><div class="ring"></div><strong>J</strong></div><h1>JARVIS</h1><p id="state" role="status">CONECTANDO</p></div>
+      <aside><small>CORE / NODE.JS</small><p id="model">Ollama local</p><button id="terminal">Abrir terminal</button><button id="hostname">Consultar equipo</button><p>Voz: pendiente de integración</p></aside>
+    </section>
+    <section class="conversation"><div id="messages" role="log" aria-live="polite"></div><form id="prompt-form"><label class="sr-only" for="prompt">Mensaje para Jarvis</label><input id="prompt" maxlength="16000" placeholder="Escribe una instrucción para Jarvis…" autocomplete="off" required><button id="send" disabled>Enviar</button><button id="cancel" type="button" disabled>Detener</button></form></section>
+    <footer><span id="connection">CORE OFFLINE</span><span>MIJARVIS / PHASE 01</span></footer>
+  </main>
+  <script src="renderer.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "@mijarvis/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "@mijarvis/core": "0.1.0",
+    "@mijarvis/system": "0.1.0"
+  },
+  "devDependencies": {
+    "electron": "44.7.2"
+  }
+}

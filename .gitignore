@@ -1,0 +1,49 @@
+# Dependencias y cachés locales (incluye los workspaces)
+node_modules/
+.npm-cache/
+.cache/
+.electron-cache/
+
+# Variables y credenciales locales; conservar plantillas de configuración
+.env
+.env.*
+!.env.example
+!.env.*.example
+.npmrc.local
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Compilaciones, instaladores y reportes generados
+dist/
+out/
+release/
+coverage/
+.nyc_output/
+artifacts/
+test-results/
+playwright-report/
+*.tsbuildinfo
+
+# Logs y archivos temporales
+logs/
+*.log
+*.tmp
+*.temp
+*.pid
+*.pid.lock
+*.stackdump
+
+# Archivos locales de editores y del sistema operativo
+.idea/
+.vscode/*.local.json
+*.swp
+*.swo
+*~
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
+# Mantener versionados package-lock.json, .initdocs y configuraciones compartidas.
