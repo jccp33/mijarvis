@@ -18,6 +18,35 @@ test('Ollama options preserve defaults and allow explicit CPU configuration', ()
   assert.throws(() => generationOptions({ OLLAMA_NUM_CTX: '0' }), /OLLAMA_NUM_CTX/);
 });
 
+test('Core releases active request after context discovery fails or is cancelled', { timeout: 5000 }, async t => {
+  let mode = 'fail';
+  const provider = {
+    async contextLimits({ signal }) {
+      if (mode === 'fail') throw new Error('metadata unavailable');
+      if (mode === 'wait') {
+        await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }));
+        signal.throwIfAborted();
+      }
+      return { contextTokens: 2048, outputTokens: 512 };
+    },
+    async *converse() { yield { type: 'result', status: 'completed', text: '' }; },
+  };
+  const core = await startCore({ port: 0, token, provider });
+  t.after(() => core.close());
+  const ws = new WebSocket(`ws://127.0.0.1:${core.port}/ws?token=${token}`);
+  const next = events(ws); await next('ready');
+  ws.send(JSON.stringify({ type: 'prompt', id: 'failure', prompt: 'hi' }));
+  assert.match((await next('error')).message, /metadata unavailable/);
+  mode = 'wait';
+  ws.send(JSON.stringify({ type: 'prompt', id: 'cancel', prompt: 'hi' }));
+  await next('state');
+  ws.send(JSON.stringify({ type: 'cancel', id: 'cancel' }));
+  assert.equal((await next('error')).id, 'cancel');
+  mode = 'ok';
+  ws.send(JSON.stringify({ type: 'prompt', id: 'retry', prompt: 'hi' }));
+  assert.equal((await next('done')).id, 'retry');
+});
+
 test('Ollama forwards CPU options and explains CUDA initialization errors', async t => {
   const baseUrl = await mockOllama(t, async (req, res) => {
     let body = '';
@@ -32,7 +61,13 @@ test('Ollama forwards CPU options and explains CUDA initialization errors', asyn
 });
 
 async function mockOllama(t, handler) {
-  const server = http.createServer(handler);
+  const server = http.createServer((req, res) => {
+    if (req.url === '/api/show') {
+      res.end(JSON.stringify({ model_info: { 'general.architecture': 'llama', 'llama.context_length': 8192 } }));
+      return;
+    }
+    return handler(req, res);
+  });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
@@ -91,11 +126,14 @@ test('Ollama rejects incomplete streams and HTTP errors', async t => {
 
 test('Core streams replies, reports invalid messages and serves health', { timeout: 10000 }, async t => {
   const ollamaUrl = await mockOllama(t, async (req, res) => {
-    assert.equal(req.url, '/api/generate');
+    assert.equal(req.url, '/api/chat');
     let body = '';
     for await (const chunk of req) body += chunk;
-    assert.equal(JSON.parse(body).prompt, 'hola');
-    res.end('{"response":"Hola"}\n{"response":" mundo","done":true}\n');
+    const messages = JSON.parse(body).messages;
+    assert.equal(messages[0].role, 'system');
+    assert.match(messages[0].content, /español/);
+    assert.deepEqual(messages.slice(1), [{ role: 'user', content: 'hola' }]);
+    res.end('{"message":{"content":"Hola"}}\n{"message":{"content":" mundo"},"done":true}\n');
   });
   const core = await startCore({ port: 0, token, ollamaUrl });
   t.after(() => core.close());
@@ -129,7 +167,7 @@ test('Core rejects invalid token and browser origins', { timeout: 5000 }, async 
 test('Core cancels generation and accepts another request', { timeout: 10000 }, async t => {
   const ollamaUrl = await mockOllama(t, (_req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
-    res.write('{"response":"start"}\n');
+    res.write('{"message":{"content":"start"}}\n');
   });
   const core = await startCore({ port: 0, token, ollamaUrl });
   t.after(() => core.close());
@@ -144,4 +182,59 @@ test('Core cancels generation and accepts another request', { timeout: 10000 }, 
   assert.equal((await next('token')).id, 'second');
   ws.send(JSON.stringify({ type: 'cancel', id: 'second' }));
   await next('error');
+});
+
+test('Core keeps completed context per connection and excludes unsuccessful turns', { timeout: 10000 }, async t => {
+  const calls = [];
+  const provider = {
+    async *converse({ messages, signal }) {
+      calls.push(structuredClone(messages.filter(message => message.role !== 'system')));
+      const prompt = messages.at(-1).content;
+      yield { type: 'delta', text: 'respuesta' };
+      if (prompt === 'cancelar') {
+        await new Promise(resolve => {
+          if (signal.aborted) resolve();
+          else signal.addEventListener('abort', resolve, { once: true });
+        });
+        signal.throwIfAborted();
+      }
+      if (prompt === 'fallar') {
+        yield { type: 'result', status: 'failed', text: 'respuesta', error: { message: 'fallo simulado' } };
+      } else if (prompt !== 'incompleto') {
+        yield { type: 'result', status: 'completed', text: 'respuesta' };
+      }
+    },
+  };
+  const core = await startCore({ port: 0, token, provider });
+  t.after(() => core.close());
+  const open = async () => {
+    const ws = new WebSocket(`ws://127.0.0.1:${core.port}/ws?token=${token}`);
+    const next = events(ws);
+    await next('ready');
+    return { ws, next };
+  };
+  const first = await open();
+  const second = await open();
+  const run = async (client, prompt, terminal = 'done') => {
+    client.ws.send(JSON.stringify({ type: 'prompt', id: prompt, prompt }));
+    if (prompt === 'cancelar') {
+      await client.next('token');
+      client.ws.send(JSON.stringify({ type: 'cancel', id: prompt }));
+    }
+    assert.equal((await client.next(terminal)).id, prompt);
+  };
+  await run(first, 'primero');
+  for (const prompt of ['fallar', 'incompleto', 'cancelar']) await run(first, prompt, 'error');
+  await run(first, 'continuar');
+  const pair = [{ role: 'user', content: 'primero' }, { role: 'assistant', content: 'respuesta' }];
+  for (let index = 1; index < calls.length; index++) {
+    assert.deepEqual(calls[index], [...pair, { role: 'user', content: ['fallar', 'incompleto', 'cancelar', 'continuar'][index - 1] }]);
+  }
+  await run(second, 'aislado');
+  assert.deepEqual(calls.at(-1), [{ role: 'user', content: 'aislado' }]);
+  first.ws.close();
+  await once(first.ws, 'close');
+  const reconnected = await open();
+  await run(reconnected, 'nuevo');
+  assert.deepEqual(calls.at(-1), [{ role: 'user', content: 'nuevo' }]);
 });

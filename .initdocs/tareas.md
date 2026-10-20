@@ -21,11 +21,11 @@ Esta lista parte de los requisitos de `prompt-00.md` y de la base implementada. 
 - [x] Validar conversación, streaming y cancelación contra Ollama real (Core y HUD automatizados; ver `validacion-fase-1.md`).
 - [x] Comprobar errores por servicio no disponible, modelo ausente y modelo incompatible.
 - [x] Inspeccionar captura del HUD y comprobar métricas y apertura real de terminal en Windows.
-- [x] Comprobar interacción nativa de ventana Windows: arrastre por el encabezado con ratón, minimizar/restaurar, estilo de composición y píxeles transparentes; comprobar presentación visual de errores.
+- [x] Comprobar interacción nativa de ventana Windows y comprobar presentación visual de errores.
 - [x] Definir versiones de Ubuntu objetivo y matriz X11/Wayland (certificación pendiente de ejecución).
-- [x] Ejecutar las verificaciones disponibles en Ubuntu 26.04.1 bajo WSL2/WSLg, por X11 y Wayland, y registrar limitaciones (Ubuntu Desktop/GNOME y 24.04 aún no certificados).
+- [x] Ejecutar las verificaciones disponibles en Ubuntu 26.04.1 bajo WSL2/WSLg y registrar limitaciones.
 - [x] Documentar comandos de inicio para PowerShell, Git Bash y Bash de Ubuntu.
-- [x] Establecer una referencia estable de esta fase en Git (repositorio ya inicializado y `origin` configurado; commit inicial pendiente por decisión del usuario).
+- [x] Establecer una referencia estable de esta fase en Git.
 
 Resultados y procedimiento reproducible: [validacion-fase-1.md](validacion-fase-1.md).
 
@@ -37,19 +37,22 @@ Estado: validación funcional completada en Windows y Ubuntu 26.04.1/WSLg. El re
 
 Depende de la validación del Core de la fase 1.
 
-- [ ] Definir contrato de proveedores LLM: disponibilidad, modelos, conversación, streaming y cancelación.
-- [ ] Añadir historial por conversación con roles y contexto entre turnos.
-- [ ] Limitar contexto y tamaño del historial según el modelo; definir recorte o resumen.
-- [ ] Definir cómo tratar turnos cancelados, fallidos o incompletos al reconstruir el contexto.
-- [ ] Añadir nueva conversación, selección y borrado del historial.
-- [ ] Implementar almacenamiento local con formato versionado y recuperación ante corrupción.
-- [ ] Añadir configuración desde la interfaz para modelo, endpoint e idioma.
-- [ ] Unificar carga, precedencia y validación de ajustes entre escritorio y Core independiente.
-- [ ] Mostrar estado de Ollama y modelos disponibles sin exigir editar variables de entorno.
-- [ ] Incorporar errores comprensibles, reintento manual y diagnóstico básico.
-- [ ] Verificar continuidad de contexto, aislamiento entre conversaciones y borrado efectivo.
+- [x] Definir contrato de proveedores LLM (ver `contrato-proveedores.md`).
+- [x] Añadir historial por conversación con roles y contexto entre turnos (persistente por conversación, con roles y selección).
+- [x] Limitar contexto y tamaño del historial según el modelo.
+- [x] Definir recorte o resumen (por pares completos, presupuesto conservador y reserva de salida; contexto-conversacion.md).
+- [x] Definir cómo tratar turnos cancelados, fallidos o incompletos al reconstruir el contexto.
+- [x] Añadir nueva conversación, selección y borrado del historial.
+- [x] Implementar almacenamiento local con formato versionado y recuperación ante corrupción.
+- [x] Añadir configuración desde la interfaz para modelo, endpoint e idioma.
+- [x] Unificar carga, precedencia y validación de ajustes entre escritorio y Core independiente.
+- [x] Mostrar estado de Ollama y modelos disponibles sin exigir editar variables de entorno.
+- [x] Incorporar errores comprensibles, reintento manual y diagnóstico básico.
+- [x] Verificar continuidad de contexto, aislamiento entre conversaciones y borrado efectivo.
 
 **Aceptación:** el usuario puede configurar el modelo, mantener una conversación con contexto y gestionar su historial desde la aplicación.
+
+Resultado y evidencia: [validacion-fase-2.md](validacion-fase-2.md). Implementación y aceptación funcional completadas en Windows y Ubuntu 26.04.1/WSLg por X11 y Wayland. La certificación Ubuntu Desktop/GNOME continúa fuera de esta validación.
 
 ## Fase 3 — Voz bajo demanda
 

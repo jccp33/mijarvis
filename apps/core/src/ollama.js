@@ -15,11 +15,11 @@ export function generationOptions(env = process.env) {
   return options;
 }
 
-export async function* generate({ baseUrl, model, prompt, signal, options = generationOptions() }) {
-  const response = await fetch(new URL('/api/generate', baseUrl), {
+export async function* generate({ baseUrl, model, prompt, messages, signal, options = generationOptions() }) {
+  const response = await fetch(new URL(messages ? '/api/chat' : '/api/generate', baseUrl), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, prompt, stream: true, ...(Object.keys(options).length ? { options } : {}) }),
+    body: JSON.stringify({ model, ...(messages ? { messages } : { prompt }), stream: true, ...(Object.keys(options).length ? { options } : {}) }),
     signal,
   });
   if (!response.ok) {
@@ -37,7 +37,8 @@ export async function* generate({ baseUrl, model, prompt, signal, options = gene
     const event = JSON.parse(line);
     if (event.error) throw new Error(String(event.error));
     if (event.done) done = true;
-    return typeof event.response === 'string' ? event.response : '';
+    const text = messages ? event.message?.content : event.response;
+    return typeof text === 'string' ? text : '';
   }
   for await (const chunk of response.body) {
     pending += decoder.decode(chunk, { stream: true });

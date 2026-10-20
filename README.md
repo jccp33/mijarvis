@@ -18,9 +18,9 @@ ollama pull llama3.2
 ollama serve
 ```
 
-Si Ollama ya está ejecutándose, no inicies otro servidor. El modelo debe estar descargado antes de enviar el primer mensaje. El chat de esta fase procesa cada mensaje de forma independiente, sin memoria conversacional.
+Si Ollama ya está ejecutándose, no inicies otro servidor. El modelo debe estar descargado antes de enviar el primer mensaje. El chat guarda localmente las conversaciones y restaura su contexto al seleccionarlas, incluso después de cerrar la app. Usa **Nueva**, el selector y **Borrar** para gestionar el historial. Los turnos cancelados, fallidos o incompletos se excluyen; **Reintentar** vuelve a enviar el último prompt fallido de la conversación actual. El contexto conserva los turnos completos más recientes que caben en un presupuesto conservador según el modelo, con espacio reservado para responder. Los mensajes demasiado grandes se rechazan sin perder el contexto anterior. El historial en memoria conserva hasta 128 000 caracteres, retirando pares antiguos al completar un turno. Detalles y limitaciones en [.initdocs/contexto-conversacion.md](.initdocs/contexto-conversacion.md).
 
-Para personalizar el modelo del escritorio, define `OLLAMA_MODEL` y, opcionalmente, `OLLAMA_URL` en el entorno antes de iniciar. Ejemplo en PowerShell:
+Abre **Ajustes** para guardar modelo, servidor Ollama e idioma de las respuestas (español o inglés). **Comprobar conexión** muestra disponibilidad, modelos instalados y diagnóstico básico. También puedes definir `OLLAMA_MODEL` y `OLLAMA_URL` en el entorno antes de iniciar; tienen prioridad sobre los ajustes guardados al reiniciar. Ejemplo en PowerShell:
 
 ```powershell
 $env:OLLAMA_MODEL = 'llama3.2'
@@ -66,7 +66,7 @@ Si persiste, puedes usar CPU (más lento):
 OLLAMA_MODEL=llama3.1:8b OLLAMA_NUM_CTX=2048 OLLAMA_NUM_GPU=0 npm start
 ```
 
-En PowerShell establece `$env:OLLAMA_NUM_CTX = '2048'` y `$env:OLLAMA_NUM_GPU = '0'` antes de `npm start`. Reinicia MiJarvis para aplicar cambios del entorno. Estas opciones se envían como `options.num_ctx` y `options.num_gpu`; si se omiten, se conservan los valores de Ollama. El escritorio lee el entorno del proceso; `.env` solo se carga con `npm run core`.
+En PowerShell establece `$env:OLLAMA_NUM_CTX = '2048'` y `$env:OLLAMA_NUM_GPU = '0'` antes de `npm start`. Reinicia MiJarvis para aplicar cambios del entorno. El Core consulta los metadatos del modelo y envía `options.num_ctx` y `options.num_predict` acordes con su presupuesto. `OLLAMA_NUM_CTX` tiene prioridad sobre el parámetro del modelo, sin exceder su capacidad declarada; si faltan ambos se usan 2048 tokens. `OLLAMA_NUM_GPU` se envía sin cambios cuando se configura. Ambos modos cargan el `.env` de la raíz; las variables ya presentes en el proceso tienen prioridad.
 
 Para volver al comportamiento predeterminado, elimina las variables de tu sesión (`unset OLLAMA_NUM_CTX OLLAMA_NUM_GPU` en Bash o `Remove-Item Env:OLLAMA_NUM_CTX,Env:OLLAMA_NUM_GPU -ErrorAction SilentlyContinue` en PowerShell) y reinicia MiJarvis. Los registros Windows están en `%LOCALAPPDATA%\Ollama\server.log`; consulta la [guía oficial de diagnóstico](https://docs.ollama.com/troubleshooting) si el fallo se repite.
 
@@ -78,7 +78,17 @@ Copia `.env.example` a `.env`, reemplaza `CORE_TOKEN` por un secreto de al menos
 npm run core
 ```
 
-El archivo `.env` se carga solo con este comando; el escritorio usa las variables del entorno. El endpoint `http://127.0.0.1:4317/health` comprueba que el Core está activo, sin comprobar Ollama.
+El escritorio y el Core independiente comparten carga de `.env`, validación, formato de datos y precedencia de ajustes: valores iniciales < archivo guardado < `.env` < entorno del proceso < parámetros explícitos del Core. Guardar desde la interfaz aplica los cambios de inmediato y los persiste; las variables vuelven a tener prioridad al reiniciar. El endpoint `http://127.0.0.1:4317/health` comprueba que el Core está activo, sin comprobar Ollama.
+
+## Conversaciones y datos locales
+
+El archivo versionado `state.json` guarda ajustes y pares usuario/asistente completos en texto local. Windows usa `%LOCALAPPDATA%\MiJarvis`; Linux usa `$XDG_DATA_HOME/mijarvis` o `~/.local/share/mijarvis`. `MIJARVIS_DATA_DIR` permite elegir otra carpeta y `MIJARVIS_ENV_FILE` otro archivo de entorno. Solo un Core puede usar la misma carpeta simultáneamente.
+
+El guardado usa un archivo temporal, sincronización y reemplazo atómico. Si se detecta corrupción, se conserva una copia `.corrupt-*`, se inicia un historial vacío y se avisa en el HUD. Una versión desconocida detiene el arranque sin sobrescribirla. Borrar elimina la conversación del archivo activo y del contexto; las copias de corrupción se conservan para recuperación manual. No equivale a borrado seguro del soporte.
+
+Se admiten hasta 100 conversaciones, 128 000 caracteres y 16 000 mensajes por conversación y 64 MB de estado total. El idioma configura las respuestas del asistente; la interfaz permanece en español. Cambiar servidor o modelo afecta las próximas respuestas y conserva el historial seleccionado. La conversación se envía únicamente al servidor configurado, sin fallback automático.
+
+Procedimiento, protocolo y evidencias: [.initdocs/validacion-fase-2.md](.initdocs/validacion-fase-2.md).
 
 ## Estructura
 
@@ -97,8 +107,9 @@ El escritorio aloja el servidor Core dentro del proceso principal en esta fase. 
 
 - Ventana sin marco y con fondo transparente; cerrar, minimizar y mover desde el encabezado.
 - HUD con núcleo animado según actividad y métricas CPU/RAM cada segundo.
-- Cliente Ollama `/api/generate` con streaming NDJSON, cancelación y tiempo máximo de 120 segundos.
-- Reconexión automática del HUD al Core.
+- Proveedor Ollama `/api/chat` con contexto de conversación con streaming NDJSON, cancelación y tiempo máximo de 120 segundos.
+- Conversaciones persistentes con selección, creación, borrado y reconexión al contexto guardado.
+- Ajustes desde el HUD, descubrimiento de modelos, diagnóstico y reintento manual.
 - `SystemController.openTerminal()`, `getSystemStats()` y `runSystemCommand(command)`.
 - Adaptadores PowerShell para Windows y `x-terminal-emulator` para Ubuntu.
 
@@ -124,9 +135,10 @@ Eventos del servidor: `ready` (modelo), `stats` (métricas), `state` (`thinking`
 npm run check
 npm test
 npm run test:desktop
+npm run validate:phase2
 ```
 
-Las pruebas no requieren Ollama, no abren terminales y usan servidores HTTP simulados. Incluyen respuestas fragmentadas, UTF-8, errores HTTP, streams incompletos, autenticación, cancelación y comandos permitidos. `test:desktop` requiere un entorno gráfico y comprueba con una ventana oculta el preload, la conexión WebSocket y la recepción de métricas. No sustituye una prueba visual de Electron ni una validación en ambos sistemas operativos.
+Las pruebas no requieren Ollama, no abren terminales y usan servidores HTTP simulados. `validate:phase2` ejecuta dos arranques del HUD con datos aislados: ajustes, cambio de servidor/modelo/idioma, selección, reintento, cancelación, borrado y recuperación tras reiniciar. Incluyen respuestas fragmentadas, UTF-8, errores HTTP, streams incompletos, autenticación, cancelación y comandos permitidos. `test:desktop` requiere un entorno gráfico y comprueba con una ventana oculta el preload, la conexión WebSocket y la recepción de métricas. No sustituye una prueba visual de Electron ni una validación en ambos sistemas operativos.
 
 Validación adicional con Ollama real:
 
@@ -143,6 +155,6 @@ Ubuntu 26.04.1 fue validado bajo WSL2/WSLg mediante X11 y Wayland, con Node/Elec
 
 ## Próximas fases
 
-Pendientes: micrófono, wake word, STT/TTS, métricas GPU, bandeja de sistema/ejecución residente, memoria conversacional, proveedores de nube e instaladores. Al cerrar la ventana, termina la aplicación y su Core. No hay activación por voz ni ejecución autónoma de comandos en esta fase.
+Pendientes: micrófono, wake word, STT/TTS, métricas GPU, bandeja de sistema/ejecución residente, proveedores de nube e instaladores. Al cerrar la ventana, termina la aplicación y su Core. No hay activación por voz ni ejecución autónoma de comandos en esta fase.
 
 Referencias: [seguridad de Electron](https://www.electronjs.org/docs/latest/tutorial/security), [API de generación de Ollama](https://docs.ollama.com/api/generate) y [ws](https://github.com/websockets/ws).

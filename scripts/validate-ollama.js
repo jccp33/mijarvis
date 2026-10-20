@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir, mkdtemp } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { startCore } from '../apps/core/src/server.js';
 
@@ -88,6 +89,31 @@ await check('real cancellation and subsequent recovery', async () => {
   } finally { await client.close(); }
 });
 
+await check('real conversation context survives Core restart', async () => {
+  const root = resolve(process.env.MIJARVIS_ARTIFACT_DIR || 'artifacts');
+  await mkdir(root, { recursive: true });
+  const dataDir = await mkdtemp(join(root, 'real-history-'));
+  const options = { ollamaUrl: baseUrl, model, dataDir };
+  let client = await connect(options);
+  try {
+    client.send({ type: 'prompt', id: 'remember', prompt: 'Recuerda este código: azul7319. Responde solamente OK.' });
+    const end = await client.wait(event => event.id === 'remember' && ['done', 'error'].includes(event.type));
+    assert.equal(end.type, 'done', end.message);
+    await client.close();
+    client = await connect(options);
+    client.send({ type: 'conversation.select', id: 'select', conversationId: end.conversationId });
+    const selected = await client.wait(event => event.id === 'select');
+    assert.equal(selected.type, 'conversation', selected.message);
+    assert.equal(selected.conversation.messages.length, 2);
+    client.send({ type: 'prompt', id: 'recall', prompt: '¿Qué código te dije? Responde solamente el código.' });
+    const recalled = await client.wait(event => event.id === 'recall' && ['done', 'error'].includes(event.type));
+    assert.equal(recalled.type, 'done', recalled.message);
+    const text = client.history.filter(event => event.id === 'recall' && event.type === 'token').map(event => event.text).join('');
+    assert.match(text, /azul7319/i);
+    return { model, text, dataDir };
+  } finally { await client.close(); }
+});
+
 async function errorCase(options, expected) {
   const client = await connect(options);
   try {
@@ -106,14 +132,14 @@ await check('unavailable service without stopping user Ollama', async () => {
   await once(unused, 'listening');
   const port = unused.address().port;
   await new Promise(resolve => unused.close(resolve));
-  return errorCase({ ollamaUrl: `http://127.0.0.1:${port}`, model }, /fetch failed|ECONNREFUSED/i);
+  return errorCase({ ollamaUrl: `http://127.0.0.1:${port}`, model }, /No se pudo conectar/i);
 });
 await check('missing model against real Ollama', () => errorCase({
   ollamaUrl: baseUrl, model: 'mijarvis-model-that-does-not-exist:phase1',
-}, /404|not found/i));
+}, /No se encontró el modelo/i));
 await check('incompatible embedding model against real Ollama', () => errorCase({
   ollamaUrl: baseUrl, model: process.env.OLLAMA_EMBED_MODEL || 'nomic-embed-text:latest',
-}, /does not support|not supported|400/i));
+}, /no admite conversación|400/i));
 
 const artifactDirectory = process.env.MIJARVIS_ARTIFACT_DIR || 'artifacts';
 await mkdir(artifactDirectory, { recursive: true });

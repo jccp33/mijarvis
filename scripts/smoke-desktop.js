@@ -15,6 +15,6 @@ const timeout = setTimeout(() => {
   console.error('Desktop smoke test timed out');
   child.kill();
   process.exitCode = 1;
-}, process.argv.includes('--validate-ollama') ? 150000 : 20000);
+}, process.argv.includes('--validate-ollama') ? 150000 : 30000);
 child.on('error', error => { clearTimeout(timeout); console.error(error.message); process.exitCode = 1; });
 child.on('exit', code => { clearTimeout(timeout); process.exitCode = timedOut ? 1 : (code ?? 1); });

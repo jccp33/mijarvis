@@ -15,9 +15,26 @@
       <div class="center"><div id="orb" class="orb"><div class="ring"></div><strong>J</strong></div><h1>JARVIS</h1><p id="state" role="status">CONECTANDO</p></div>
       <aside><small>CORE / NODE.JS</small><p id="model">Ollama local</p><button id="terminal">Abrir terminal</button><button id="hostname">Consultar equipo</button><p>Voz: pendiente de integración</p></aside>
     </section>
-    <section class="conversation"><div id="messages" role="log" aria-live="polite"></div><form id="prompt-form"><label class="sr-only" for="prompt">Mensaje para Jarvis</label><input id="prompt" maxlength="16000" placeholder="Escribe una instrucción para Jarvis…" autocomplete="off" required><button id="send" disabled>Enviar</button><button id="cancel" type="button" disabled>Detener</button></form></section>
-    <footer><span id="connection">CORE OFFLINE</span><span>MIJARVIS / PHASE 01</span></footer>
+    <section class="conversation">
+      <div class="conversation-tools"><label class="sr-only" for="conversations">Conversación</label><select id="conversations" aria-label="Conversación" disabled><option>Sin conversaciones</option></select><button id="new-conversation" disabled>Nueva</button><button id="delete-conversation" disabled>Borrar</button><button id="settings-open">Ajustes</button></div>
+      <p id="notice" role="status"></p>
+      <div id="messages" role="log" aria-live="polite"></div>
+      <form id="prompt-form"><label class="sr-only" for="prompt">Mensaje para Jarvis</label><input id="prompt" maxlength="16000" placeholder="Escribe una instrucción para Jarvis…" autocomplete="off" required><button id="send" disabled>Enviar</button><button id="cancel" type="button" disabled>Detener</button><button id="retry-response" type="button" disabled>Reintentar</button></form>
+    </section>
+    <footer><span id="connection">CORE OFFLINE</span><span>MIJARVIS / PHASE 02</span></footer>
   </main>
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <h2 id="settings-title">Configuración</h2>
+    <form id="settings-form">
+      <label>Servidor Ollama<input id="setting-endpoint" type="url" maxlength="2048" required placeholder="http://127.0.0.1:11434"></label>
+      <label>Modelo<input id="setting-model" list="available-models" maxlength="256" required><datalist id="available-models"></datalist></label>
+      <label>Idioma de las respuestas<select id="setting-language"><option value="es">Español</option><option value="en">English</option></select></label>
+      <p>La conversación se enviará al servidor indicado. Guarda los cambios antes de comprobar la conexión. Las variables del entorno o .env tienen prioridad al reiniciar.</p>
+      <div class="dialog-actions"><button id="settings-save" disabled>Guardar</button><button id="diagnose" type="button" disabled>Comprobar conexión</button><button id="settings-close" type="button">Cerrar</button></div>
+    </form>
+    <p id="settings-status" role="status"></p>
+    <pre id="diagnostic" aria-label="Diagnóstico"></pre>
+  </dialog>
   <script src="renderer.js" type="module"></script>
 </body>
 </html>

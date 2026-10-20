@@ -5,8 +5,9 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { startCore } from '@mijarvis/core';
+import { startCore, dataDirectory, loadEnvironment } from '@mijarvis/core';
 import { SystemController } from '@mijarvis/system';
+import { phase2Scenario } from '../../../scripts/desktop-phase2-scenario.js';
 
 let core;
 let window;
@@ -24,7 +25,8 @@ function validate(event) {
 app.whenReady().then(async () => {
 if (smokeTest) console.log('Electron ready');
 try {
-  core = await startCore({ port: 0, token });
+  loadEnvironment();
+  core = await startCore({ port: 0, token, dataDir: smokeTest ? process.env.MIJARVIS_TEST_DATA_DIR : dataDirectory() });
   const system = new SystemController();
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   ipcMain.handle('connection', event => { validate(event); return `ws://127.0.0.1:${core.port}/ws?token=${token}`; });
@@ -46,10 +48,10 @@ try {
   await window.loadURL(page);
   if (smokeTest) {
     await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => { clearInterval(poll); reject(new Error('HUD failed: ' + document.getElementById('connection').textContent + ' / ' + document.getElementById('messages').textContent)); }, 8000);
+      const timeout = setTimeout(() => { clearInterval(poll); reject(new Error('HUD failed: ' + document.getElementById('connection').textContent + ' / ' + document.getElementById('messages').textContent)); }, 15000);
       const poll = setInterval(() => {
         if (document.getElementById('connection').textContent === 'CORE ONLINE' &&
-            document.getElementById('cpu').textContent !== '—') {
+            document.getElementById('cpu').textContent !== '—' && !document.getElementById('send').disabled) {
           clearInterval(poll); clearTimeout(timeout); resolve(true);
         }
       }, 100);
@@ -57,6 +59,10 @@ try {
     const preferences = window.webContents.getLastWebPreferences();
     if (!preferences.sandbox || !preferences.contextIsolation || preferences.nodeIntegration) {
       throw new Error('Unexpected desktop security configuration');
+    }
+    if (process.argv.includes('--validate-phase2')) {
+      await window.webContents.executeJavaScript(`(${phase2Scenario.toString()})(${JSON.stringify(process.env.MIJARVIS_PHASE2_STAGE)}, ${JSON.stringify(process.env.MIJARVIS_TEST_ENDPOINT)})`);
+      console.log(`Desktop phase 2 ${process.env.MIJARVIS_PHASE2_STAGE} OK: conversations, settings, retry and persistence`);
     }
     if (process.argv.includes('--validate-ollama')) {
       await window.webContents.executeJavaScript(`(async () => {
@@ -126,7 +132,7 @@ try {
     if (process.argv.includes('--validate-window') && screenshot.toBitmap()[3] !== 0) {
       throw new Error('HUD corner should retain transparent pixels');
     }
-    await writeFile(join(artifactDirectory, 'phase1-hud.png'), screenshot.toPNG());
+    await writeFile(join(artifactDirectory, process.argv.includes('--validate-phase2') ? 'phase2-hud.png' : 'phase1-hud.png'), screenshot.toPNG());
     if (process.argv.includes('--validate-terminal')) {
       const result = await window.webContents.executeJavaScript('window.jarvis.openTerminal()');
       if (!result.opened) throw new Error('Terminal did not launch');

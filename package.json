@@ -7,13 +7,14 @@
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "start": "npm start --workspace=@mijarvis/desktop",
-    "core": "node --env-file-if-exists=.env apps/core/src/index.js",
+    "core": "node apps/core/src/index.js",
     "test": "node --test apps/core/test/*.test.js",
     "check": "node scripts/check.js",
     "test:desktop": "node scripts/smoke-desktop.js",
     "validate:ollama": "node scripts/validate-ollama.js",
     "validate:desktop": "node scripts/smoke-desktop.js --validate-terminal --validate-ollama",
     "validate:errors": "node scripts/validate-desktop-errors.js",
+    "validate:phase2": "node scripts/validate-phase2.js",
     "validate:window": "node scripts/smoke-desktop.js --validate-window"
   }
 }
