@@ -15,6 +15,10 @@
     "validate:desktop": "node scripts/smoke-desktop.js --validate-terminal --validate-ollama",
     "validate:errors": "node scripts/validate-desktop-errors.js",
     "validate:phase2": "node scripts/validate-phase2.js",
+    "speech:install": "node scripts/speech-assets.js install",
+    "speech:verify": "node scripts/speech-assets.js verify",
+    "validate:speech": "node scripts/validate-speech.js",
+    "validate:voice": "node scripts/validate-voice.js",
     "validate:window": "node scripts/smoke-desktop.js --validate-window"
   }
 }

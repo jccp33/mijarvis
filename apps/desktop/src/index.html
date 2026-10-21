@@ -13,15 +13,17 @@
     <section class="dashboard">
       <aside><small>TELEMETRÍA / LOCAL</small><label>CPU <output id="cpu">—</output></label><meter id="cpu-meter" min="0" max="100" value="0"></meter><label>RAM <output id="ram">—</output></label><meter id="ram-meter" min="0" max="100" value="0"></meter><p id="platform">Detectando sistema…</p><small>GPU · No disponible en fase 1</small></aside>
       <div class="center"><div id="orb" class="orb"><div class="ring"></div><strong>J</strong></div><h1>JARVIS</h1><p id="state" role="status">CONECTANDO</p></div>
-      <aside><small>CORE / NODE.JS</small><p id="model">Ollama local</p><button id="terminal">Abrir terminal</button><button id="hostname">Consultar equipo</button><p>Voz: pendiente de integración</p></aside>
+      <aside><small>CORE / NODE.JS</small><p id="model">Ollama local</p><button id="terminal">Abrir terminal</button><p id="terminal-status" role="status"></p><button id="hostname">Consultar equipo</button><button id="voice-settings">Ajustes de voz</button></aside>
     </section>
     <section class="conversation">
       <div class="conversation-tools"><label class="sr-only" for="conversations">Conversación</label><select id="conversations" aria-label="Conversación" disabled><option>Sin conversaciones</option></select><button id="new-conversation" disabled>Nueva</button><button id="delete-conversation" disabled>Borrar</button><button id="settings-open">Ajustes</button></div>
       <p id="notice" role="status"></p>
+      <div class="voice-tools"><button id="voice-talk" type="button" aria-describedby="voice-status">Mantén para hablar</button><button id="voice-stop" type="button" disabled>Detener voz</button><label><input id="voice-read" type="checkbox">Leer respuestas</label><meter id="voice-level" min="0" max="1" value="0" aria-label="Nivel del micrófono"></meter><span id="voice-status" role="status">Micrófono apagado · F8</span></div>
+      <div id="voice-review" hidden><label for="voice-transcript">Revisa y corrige antes de enviar</label><textarea id="voice-transcript" maxlength="16000" rows="2"></textarea><button id="voice-send" type="button">Enviar texto revisado</button><button id="voice-discard" type="button">Descartar</button></div>
       <div id="messages" role="log" aria-live="polite"></div>
       <form id="prompt-form"><label class="sr-only" for="prompt">Mensaje para Jarvis</label><input id="prompt" maxlength="16000" placeholder="Escribe una instrucción para Jarvis…" autocomplete="off" required><button id="send" disabled>Enviar</button><button id="cancel" type="button" disabled>Detener</button><button id="retry-response" type="button" disabled>Reintentar</button></form>
     </section>
-    <footer><span id="connection">CORE OFFLINE</span><span>MIJARVIS / PHASE 02</span></footer>
+    <footer><span id="connection">CORE OFFLINE</span><span>MIJARVIS / PHASE 03</span></footer>
   </main>
   <dialog id="settings-dialog" aria-labelledby="settings-title">
     <h2 id="settings-title">Configuración</h2>
@@ -34,6 +36,20 @@
     </form>
     <p id="settings-status" role="status"></p>
     <pre id="diagnostic" aria-label="Diagnóstico"></pre>
+  </dialog>
+  <dialog id="voice-dialog" aria-labelledby="voice-title">
+    <h2 id="voice-title">Voz local</h2>
+    <p>El micrófono solo se activa al grabar o probarlo. Mantén el botón o el atajo y suelta para transcribir. El atajo funciona con esta ventana enfocada.</p>
+    <div class="voice-fields">
+      <label>Micrófono<select id="voice-input"><option value="">Predeterminado</option></select></label>
+      <label>Salida de audio<select id="voice-output"><option value="">Predeterminada</option></select></label>
+      <label>Voz<select id="voice-profile"><option value="es_MX-claude-high">Claude · español de México</option></select></label>
+      <label>Velocidad<input id="voice-speed" type="range" min="0.5" max="2" step="0.1" value="1"></label>
+      <label>Volumen<input id="voice-volume" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+      <label>Atajo para mantener<select id="voice-shortcut"><option value="F8">F8</option><option value="F9">F9</option><option value="Control+Shift+Space">Ctrl + Mayús + Espacio</option></select></label>
+    </div>
+    <div class="dialog-actions"><button id="voice-refresh" type="button">Actualizar dispositivos</button><button id="voice-test-input" type="button">Probar micrófono (2 s)</button><button id="voice-test-output" type="button">Probar salida</button><button id="voice-dialog-close" type="button">Cerrar</button></div>
+    <p id="voice-diagnostic" role="status">Los motores se comprueban al activar voz.</p>
   </dialog>
   <script src="renderer.js" type="module"></script>
 </body>

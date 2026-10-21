@@ -153,8 +153,24 @@ Para verificar errores visibles en el HUD: `npm run validate:errors`. Para compr
 
 Ubuntu 26.04.1 fue validado bajo WSL2/WSLg mediante X11 y Wayland, con Node/Electron nativos de Linux y sandbox activo. Usa dependencias separadas de Windows; no compartas `node_modules` entre ambos sistemas. La preparación, evidencias, comandos Wayland y limitaciones de GPU y red están en el documento de validación. La certificación en Ubuntu Desktop/GNOME sigue pendiente.
 
+## Voz local bajo demanda: Fase 3
+
+Ya se pueden instalar y verificar los motores STT/TTS locales y probarlos sin micrófono:
+
+```sh
+npm run speech:install
+npm run speech:verify
+npm run validate:speech
+```
+
+Usan sherpa-onnx 1.13.8 en CPU, Whisper tiny multilingüe y una voz española de México. Requieren Windows/Linux x64 y tar; Ubuntu también necesita bzip2. Son descargas opcionales de unos 208–212 MB, guardadas en .cache/speech por plataforma. El chat funciona sin instalarlas.
+
+Mantén pulsado «Mantén para hablar» o F8 con la ventana enfocada. Al soltar, revisa y corrige la transcripción antes de enviarla. Activa «Leer respuestas» para escuchar las respuestas completas; «Detener voz» interrumpe el audio. «Ajustes de voz» permite seleccionar/probar dispositivos, cambiar velocidad, volumen y atajo. El permiso de micrófono se solicita al activar captura; no hay escucha permanente.
+
+`npm run validate:voice` comprueba el flujo con audio sintético y salida silenciada; añade `-- --real-ollama --show-test-window` para usar Ollama local. Las pruebas emplean perfiles y datos aislados. Instalación y licencias en [.initdocs/voz-fase-3.md](.initdocs/voz-fase-3.md); implementación, evidencias y limitaciones de hardware en [.initdocs/validacion-voz-hud.md](.initdocs/validacion-voz-hud.md).
+
 ## Próximas fases
 
-Pendientes: micrófono, wake word, STT/TTS, métricas GPU, bandeja de sistema/ejecución residente, proveedores de nube e instaladores. Al cerrar la ventana, termina la aplicación y su Core. No hay activación por voz ni ejecución autónoma de comandos en esta fase.
+Pendientes: aceptación con audio físico, wake word, métricas GPU, bandeja de sistema/ejecución residente, proveedores de nube e instaladores. Al cerrar la ventana, termina la aplicación y su Core. No hay activación por voz ni ejecución autónoma de comandos en esta fase.
 
 Referencias: [seguridad de Electron](https://www.electronjs.org/docs/latest/tutorial/security), [API de generación de Ollama](https://docs.ollama.com/api/generate) y [ws](https://github.com/websockets/ws).

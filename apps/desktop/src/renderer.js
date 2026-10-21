@@ -1,3 +1,5 @@
+import { VoiceUI } from './voice-ui.js';
+
 const $ = id => document.getElementById(id);
 let socket;
 let request;
@@ -11,6 +13,7 @@ let settings;
 let lastPrompt;
 let failedPrompt;
 let restorePending = false;
+let voiceUI;
 const savedSelection = () => { try { return sessionStorage.getItem('mijarvis-conversation'); } catch { return null; } };
 function remember(id) { try { if (id) sessionStorage.setItem('mijarvis-conversation', id); else sessionStorage.removeItem('mijarvis-conversation'); } catch { /* storage can be unavailable */ } }
 
@@ -24,21 +27,22 @@ function message(text, className = '') {
 }
 function controls() {
   const connected = ready && socket?.readyState === WebSocket.OPEN;
-  const blocked = !connected || Boolean(request || operation);
+  const blocked = !connected || Boolean(request || operation || voiceUI?.blocking);
   $('send').disabled = blocked;
   $('cancel').disabled = !request || !connected;
   for (const id of ['new-conversation', 'conversations', 'settings-save', 'diagnose']) $(id).disabled = blocked;
   $('delete-conversation').disabled = blocked || !selected;
   $('retry-response').disabled = blocked || !failedPrompt || failedPrompt.conversationId !== selected;
-  $('state').textContent = !connected ? 'SIN CONEXIÓN' : request ? 'PROCESANDO' : operation ? 'ACTUALIZANDO' : 'EN ESPERA';
+  $('state').textContent = !connected ? 'SIN CONEXIÓN' : voiceUI?.label || (request ? 'PROCESANDO' : operation ? 'ACTUALIZANDO' : 'EN ESPERA');
   $('orb').classList.toggle('thinking', Boolean(request));
+  voiceUI?.sync();
 }
 function send(event) {
   if (socket?.readyState !== WebSocket.OPEN) throw new Error('Core desconectado');
   socket.send(JSON.stringify(event));
 }
 function manage(type, fields = {}) {
-  if (!ready || request || operation) return;
+  if (!ready || request || operation || voiceUI?.blocking) return;
   const id = crypto.randomUUID();
   operation = { id, type };
   controls();
@@ -52,6 +56,8 @@ function list(items) {
   $('conversations').value = selected || '';
 }
 function displayConversation(conversation) {
+  if (voiceUI?.blocking) void voiceUI.stop();
+  voiceUI?.clearReview();
   selected = conversation?.id;
   remember(selected);
   failedPrompt = undefined;
@@ -70,7 +76,8 @@ function applySettings(value) {
   $('diagnostic').textContent = 'Comprueba la conexión para consultar los modelos disponibles.';
 }
 function submit(prompt) {
-  if (!prompt || request || operation || !ready) return;
+  if (!prompt || request || operation || !ready || voiceUI?.blocking) return false;
+  voiceUI?.clearReview(); voiceUI?.unlock();
   request = crypto.randomUUID();
   lastPrompt = { prompt, conversationId: selected };
   failedPrompt = undefined;
@@ -78,6 +85,7 @@ function submit(prompt) {
   answer = message('');
   controls();
   send({ type: 'prompt', id: request, prompt });
+  return true;
 }
 function diagnostic(event) {
   $('available-models').replaceChildren();
@@ -134,7 +142,7 @@ async function connect() {
       }
       if (request && event.id === request) {
         if (event.type === 'token') { answer.textContent += event.text; answer.scrollIntoView(); }
-        if (event.type === 'done') { selected = event.conversationId; remember(selected); request = undefined; }
+        if (event.type === 'done') { selected = event.conversationId; remember(selected); request = undefined; void voiceUI?.speak(answer.textContent); }
         if (event.type === 'error') {
           answer?.classList.add('partial');
           failedPrompt = lastPrompt;
@@ -157,6 +165,7 @@ async function connect() {
       request = undefined;
       operation = undefined;
       failedPrompt = undefined;
+      void voiceUI?.stop();
       controls();
       $('connection').textContent = 'CORE OFFLINE · RECONECTANDO';
       retry = setTimeout(connect, 2000);
@@ -167,7 +176,7 @@ async function connect() {
 $('prompt-form').addEventListener('submit', event => {
   event.preventDefault();
   const prompt = $('prompt').value.trim();
-  if (!prompt || request || operation || !ready) return;
+  if (!prompt || request || operation || !ready || voiceUI?.blocking) return;
   submit(prompt);
   $('prompt').value = '';
 });
@@ -182,11 +191,21 @@ $('settings-form').onsubmit = event => {
   manage('settings.update', { settings: { endpoint: $('setting-endpoint').value.trim(), model: $('setting-model').value.trim(), language: $('setting-language').value } });
 };
 $('diagnose').onclick = () => manage('diagnostics');
-$('cancel').onclick = () => { if (request) send({ type: 'cancel', id: request }); };
-$('terminal').onclick = async () => { try { await window.jarvis.openTerminal(); } catch (error) { message(error.message, 'error'); } };
+$('cancel').onclick = () => { void voiceUI?.stop(); if (request) send({ type: 'cancel', id: request }); };
+$('terminal').onclick = async () => {
+  $('terminal').disabled = true; $('terminal-status').textContent = 'Abriendo terminal…'; $('terminal-status').dataset.state = 'opening';
+  try {
+    const result = await window.jarvis.openTerminal();
+    if (!result?.opened) throw new Error('El sistema no confirmó la apertura de la terminal.');
+    $('terminal-status').textContent = 'Terminal abierta en otra ventana.'; $('terminal-status').dataset.state = 'opened';
+    $('terminal-status').dataset.pid = String(result.pid || '');
+  } catch (error) { $('terminal-status').textContent = error.message; $('terminal-status').dataset.state = 'error'; message(error.message, 'error'); }
+  finally { $('terminal').disabled = false; }
+};
 $('hostname').onclick = () => { try { send({ type: 'system.command', id: crypto.randomUUID(), command: 'hostname' }); } catch (error) { message(error.message, 'error'); } };
 $('close').onclick = () => window.jarvis.close();
 $('minimize').onclick = () => window.jarvis.minimize();
 window.addEventListener('beforeunload', () => { clearTimeout(retry); socket?.close(); });
+voiceUI = new VoiceUI({ hostBusy: () => !ready || Boolean(request || operation), onChange: controls, onSubmit: submit, language: () => settings?.language || 'es' });
 controls();
 connect();

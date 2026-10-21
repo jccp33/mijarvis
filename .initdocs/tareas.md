@@ -58,22 +58,24 @@ Resultado y evidencia: [validacion-fase-2.md](validacion-fase-2.md). Implementac
 
 Depende de la fase 2 para mantener contexto en conversaciones habladas.
 
-- [ ] Comparar y seleccionar STT/TTS según español, latencia, memoria, licencia y soporte Windows/Ubuntu.
-- [ ] Definir instalación, versiones, ubicación y verificación de binarios y modelos de audio.
-- [ ] Diseñar interfaces de captura, transcripción y síntesis desacopladas del proveedor.
-- [ ] Solicitar permiso de micrófono únicamente al activar una función de voz.
-- [ ] Permitir seleccionar y probar micrófono y salida de audio.
-- [ ] Implementar pulsar para hablar mediante botón y atajo configurable.
-- [ ] Limitar duración de captura y detectar silencio o ausencia de señal.
-- [ ] Integrar STT local y mostrar la transcripción antes de enviar o permitir corregirla.
-- [ ] Integrar TTS local con selección de voz, velocidad y volumen.
-- [ ] Dividir respuestas en segmentos reproducibles sin leer tokens incompletos.
-- [ ] Añadir controles para detener captura, generación y reproducción.
-- [ ] Evitar que la salida de voz reactive la captura; definir interrupción mientras Jarvis habla.
-- [ ] Liberar dispositivos, procesos y archivos temporales al cancelar o cerrar.
-- [ ] Probar permisos denegados, desconexión del micrófono y errores del motor de audio.
+- [x] Comparar y seleccionar STT/TTS según español, latencia, memoria, licencia y soporte Windows/Ubuntu.
+- [x] Definir instalación, versiones, ubicación y verificación de binarios y modelos de audio.
+- [x] Diseñar interfaces de captura, transcripción y síntesis desacopladas del proveedor.
+- [x] Solicitar permiso de micrófono únicamente al activar una función de voz.
+- [x] Permitir seleccionar y probar micrófono y salida de audio.
+- [x] Implementar pulsar para hablar mediante botón y atajo configurable.
+- [x] Limitar duración de captura y detectar silencio o ausencia de señal.
+- [x] Integrar STT local y mostrar la transcripción antes de enviar o permitir corregirla.
+- [x] Integrar TTS local con selección de voz, velocidad y volumen.
+- [x] Dividir respuestas en segmentos reproducibles sin leer tokens incompletos.
+- [x] Añadir controles para detener captura, generación y reproducción.
+- [x] Evitar que la salida de voz reactive la captura; definir interrupción mientras Jarvis habla.
+- [x] Liberar dispositivos, procesos y archivos temporales al cancelar o cerrar.
+- [x] Probar permisos denegados, desconexión del micrófono y errores del motor de audio.
 
 **Aceptación:** completar voz → texto → modelo → voz en ambas plataformas, con cancelación y recuperación de errores.
+
+Implementación integrada y validada con audio sintético: [validacion-voz-hud.md](validacion-voz-hud.md). Motores y contratos: [voz-fase-3.md](voz-fase-3.md). Pendiente la aceptación con micrófono/altavoces físicos y Ubuntu Desktop; las casillas reflejan implementación.
 
 ## Fase 4 — Ejecución en segundo plano y activación por voz
 

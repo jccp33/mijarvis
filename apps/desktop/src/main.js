@@ -2,24 +2,35 @@ import { app, BrowserWindow, ipcMain, session } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdtempSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { startCore, dataDirectory, loadEnvironment } from '@mijarvis/core';
 import { SystemController } from '@mijarvis/system';
 import { phase2Scenario } from '../../../scripts/desktop-phase2-scenario.js';
+import { MediaGate, createVoiceService, voiceResult } from './voice-service.js';
+import { voiceScenario } from '../../../scripts/desktop-voice-scenario.js';
 
 let core;
 let window;
 let quitting = false;
 let exitCode = 0;
+let voice;
+let gate;
 const token = randomBytes(32).toString('hex');
 const page = new URL('./index.html', import.meta.url).href;
 const smokeTest = process.argv.includes('--smoke-test');
+if (smokeTest) {
+  const profile = process.env.MIJARVIS_TEST_PROFILE || mkdtempSync(join(tmpdir(), 'mijarvis-desktop-test-'));
+  mkdirSync(profile, { recursive: true });
+  app.setPath('userData', profile);
+}
 if (smokeTest) console.log('Desktop main loaded');
 
 function validate(event) {
-  if (!window || event.sender !== window.webContents || event.senderFrame?.url !== page) throw new Error('Unauthorized IPC');
+  if (!window || window.isDestroyed() || event.sender !== window.webContents || event.senderFrame?.url !== page) throw new Error('Unauthorized IPC');
 }
 
 app.whenReady().then(async () => {
@@ -28,9 +39,18 @@ try {
   loadEnvironment();
   core = await startCore({ port: 0, token, dataDir: smokeTest ? process.env.MIJARVIS_TEST_DATA_DIR : dataDirectory() });
   const system = new SystemController();
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  voice = createVoiceService(); gate = new MediaGate(page);
+  const trustedContents = contents => Boolean(window && !window.isDestroyed() && contents === window.webContents && contents.getURL() === page);
+  session.defaultSession.setPermissionCheckHandler((contents, permission, _origin, details) => trustedContents(contents) && gate.allows(permission, details));
+  session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => callback(trustedContents(contents) && gate.allows(permission, details, true)));
   ipcMain.handle('connection', event => { validate(event); return `ws://127.0.0.1:${core.port}/ws?token=${token}`; });
   ipcMain.handle('terminal', event => { validate(event); return system.openTerminal(); });
+  ipcMain.handle('voice:arm', (event, kind) => { validate(event); gate.arm(kind); return true; });
+  ipcMain.handle('voice:disarm', event => { if (quitting || window?.isDestroyed() || !event.senderFrame) return true; validate(event); gate.disarm(); return true; });
+  ipcMain.handle('voice:status', event => { validate(event); return voiceResult(() => voice.status()); });
+  ipcMain.handle('voice:transcribe', (event, input) => { validate(event); return voiceResult(() => voice.transcribe(input)); });
+  ipcMain.handle('voice:synthesize', (event, input) => { validate(event); return voiceResult(() => voice.synthesize(input)); });
+  ipcMain.handle('voice:cancel', (event, id) => { if (quitting || window?.isDestroyed() || !event.senderFrame) return { ok: true }; validate(event); return voiceResult(() => voice.cancel(id)); });
   ipcMain.on('close', event => { validate(event); window.close(); });
   ipcMain.on('minimize', event => { validate(event); window.minimize(); });
   window = new BrowserWindow({
@@ -45,6 +65,9 @@ try {
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
+  window.on('closed', () => { gate.disarm(); void voice.close(); });
+  window.webContents.on('render-process-gone', () => { gate.disarm(); void voice.cancel(); });
+  window.webContents.on('did-start-navigation', () => { gate.disarm(); void voice.cancel(); });
   await window.loadURL(page);
   if (smokeTest) {
     await window.webContents.executeJavaScript(`new Promise((resolve, reject) => {
@@ -63,6 +86,27 @@ try {
     if (process.argv.includes('--validate-phase2')) {
       await window.webContents.executeJavaScript(`(${phase2Scenario.toString()})(${JSON.stringify(process.env.MIJARVIS_PHASE2_STAGE)}, ${JSON.stringify(process.env.MIJARVIS_TEST_ENDPOINT)})`);
       console.log(`Desktop phase 2 ${process.env.MIJARVIS_PHASE2_STAGE} OK: conversations, settings, retry and persistence`);
+    }
+    if (process.argv.includes('--validate-voice')) {
+      const evidence = await window.webContents.executeJavaScript(`(${voiceScenario.toString()})()`, true);
+      console.log('Desktop voice scenario OK: ' + JSON.stringify(evidence));
+      await mkdir(process.env.MIJARVIS_ARTIFACT_DIR || 'artifacts', { recursive: true });
+      await writeFile(join(process.env.MIJARVIS_ARTIFACT_DIR || 'artifacts', 'voice-hud.json'), JSON.stringify(evidence, null, 2));
+      window.setSize(760, 600);
+      await window.webContents.executeJavaScript(`document.getElementById('voice-review').hidden = false; document.getElementById('voice-transcript').value = ${JSON.stringify(evidence.transcription)};`);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await window.webContents.executeJavaScript(`(() => {
+        for (const id of ['voice-send', 'voice-talk', 'send']) {
+          const box = document.getElementById(id).getBoundingClientRect();
+          if (box.bottom > innerHeight || box.top < 0 || box.right > innerWidth) throw new Error('Voice controls clipped at minimum size: ' + id);
+        }
+      })()`);
+      await writeFile(join(process.env.MIJARVIS_ARTIFACT_DIR || 'artifacts', 'voice-review.png'), (await window.webContents.capturePage()).toPNG());
+      window.setSize(1000, 740);
+      await window.webContents.executeJavaScript("document.getElementById('voice-settings').click()");
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await writeFile(join(process.env.MIJARVIS_ARTIFACT_DIR || 'artifacts', 'voice-settings.png'), (await window.webContents.capturePage()).toPNG());
+      await window.webContents.executeJavaScript("document.getElementById('voice-dialog-close').click(); document.getElementById('voice-review').hidden=true;");
     }
     if (process.argv.includes('--validate-ollama')) {
       await window.webContents.executeJavaScript(`(async () => {
@@ -134,9 +178,25 @@ try {
     }
     await writeFile(join(artifactDirectory, process.argv.includes('--validate-phase2') ? 'phase2-hud.png' : 'phase1-hud.png'), screenshot.toPNG());
     if (process.argv.includes('--validate-terminal')) {
-      const result = await window.webContents.executeJavaScript('window.jarvis.openTerminal()');
-      if (!result.opened) throw new Error('Terminal did not launch');
-      console.log('Desktop terminal IPC OK (interactive terminal opened)');
+      const probe = fileURLToPath(new URL('../../../scripts/validate-terminal.ps1', import.meta.url));
+      let baseline = [];
+      if (process.platform === 'win32') baseline = JSON.parse((await promisify(execFile)('powershell.exe', ['-NoProfile', '-File', probe, '-ListOnly'], { windowsHide: true, timeout: 15000 })).stdout);
+      await window.webContents.executeJavaScript(`(async () => {
+        document.getElementById('terminal').click();
+        const start = Date.now();
+        while (document.getElementById('terminal').disabled) {
+          if (Date.now() - start > 12000) throw new Error('Terminal button timed out');
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        if (document.getElementById('terminal-status').dataset.state !== 'opened') throw new Error(document.getElementById('terminal-status').textContent);
+      })()`);
+      if (process.platform === 'win32') {
+        const args = ['-NoProfile', '-File', probe];
+        if (baseline.length) args.push('-Exclude', baseline.join(','));
+        const result = await promisify(execFile)('powershell.exe', args, { windowsHide: true, timeout: 15000 });
+        console.log(result.stdout.trim());
+      }
+      console.log('Desktop terminal button and IPC OK');
     }
     console.log('Desktop smoke test OK: preload, WebSocket and telemetry');
     app.quit();
@@ -152,6 +212,7 @@ app.on('before-quit', event => {
   if (core && !quitting) {
     event.preventDefault();
     quitting = true;
-    core.close().finally(() => app.exit(exitCode));
+    gate?.disarm();
+    Promise.allSettled([core.close(), voice?.close()]).finally(() => app.exit(exitCode));
   }
 });
